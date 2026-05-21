@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -6,22 +7,26 @@
   --color-dark-bg: #0F1115;
   --color-surface: #1C1F26;
   --color-card-glass: rgba(255, 255, 255, 0.03);
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
 @layer base {
   body {
-    @apply bg-dark-bg text-slate-200 antialiased font-sans;
+    @apply bg-dark-bg text-slate-200 antialiased font-sans scroll-smooth;
   }
 }
 
 @layer components {
   .glass {
     @apply bg-white/[0.02] backdrop-blur-[20px] border border-white/[0.06];
+    will-change: transform, opacity;
   }
   
   .session-card {
-    @apply transition-all duration-300 border border-white/[0.03] hover:border-white/10 hover:-translate-y-1;
+    @apply transition-[transform,opacity,border-color,box-shadow] duration-200 border border-white/[0.03] hover:border-white/10 hover:-translate-y-0.5;
+    will-change: transform, opacity, border-color, box-shadow;
+    transform: translateZ(0);
   }
 
   .session-card-active {
@@ -29,11 +34,13 @@
   }
 
   .btn-orange {
-    @apply bg-brand-orange hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-xl transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-brand-orange/10;
+    @apply bg-brand-orange hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-xl transition-[transform,background-color,box-shadow] duration-150 active:scale-95 disabled:opacity-50 shadow-lg shadow-brand-orange/10;
+    will-change: transform;
   }
 
   .btn-ghost {
-    @apply bg-white/5 hover:bg-white/10 text-white font-medium py-2 px-4 rounded-lg transition-all active:scale-95 border border-white/5;
+    @apply bg-white/5 hover:bg-white/10 text-white font-medium py-2 px-4 rounded-lg transition-[transform,background-color] duration-150 active:scale-95 border border-white/5;
+    will-change: transform;
   }
 
   .active-tab {
@@ -41,7 +48,7 @@
   }
 }
 
-/* Custom scrollbar for high density layout */
+/* Custom scrollbar for high density layout with PWA inertia scrolling compatibility */
 ::-webkit-scrollbar {
   width: 4px;
 }
@@ -54,3 +61,4 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-white/20;
 }
+

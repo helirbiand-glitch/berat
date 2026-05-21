@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "booking": {
+      "title": "Booking",
+      "description": "Details of a specific customer booking within a session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "count": { "type": "number" }
+      },
+      "required": ["id", "customerName", "phone", "count"]
+    },
+    "session": {
+      "title": "Session",
+      "description": "A single Flying Theater session at a specific time",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "time": { "type": "string" },
+        "movieId": { "type": "string" },
+        "peopleCount": { "type": "number" },
+        "isFinished": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["open", "active", "maintenance"] },
+        "activeSince": { "type": "number" },
+        "groupId": { "type": "string" },
+        "bookings": { 
+          "type": "array",
+          "items": { "$ref": "#/entities/booking" }
+        }
+      },
+      "required": ["id", "time", "movieId", "peopleCount", "isFinished", "status"]
+    },
+    "group": {
+      "title": "Group",
+      "description": "A group reservation blocking multiple sessions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "peopleCount": { "type": "number" },
+        "sessionsBlocked": { 
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["id", "name", "peopleCount", "sessionsBlocked"]
+    },
+    "historyItem": {
+      "title": "History Item",
+      "description": "Log of actions performed in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "action", "details"]
+    },
+    "settings": {
+      "title": "System Settings",
+      "description": "Global configuration for the center",
+      "type": "object",
+      "properties": {
+        "capacity": { "type": "number" },
+        "operatorName": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/sessions/{sessionId}": {
+      "schema": "session",
+      "description": "Flying Theater session records"
+    },
+    "/groups/{groupId}": {
+      "schema": "group",
+      "description": "Persistent group blocks"
+    },
+    "/history/{historyId}": {
+      "schema": "historyItem",
+      "description": "Action logs"
+    },
+    "/settings/global": {
+      "schema": "settings",
+      "description": "Global center settings"
+    }
+  }
+}

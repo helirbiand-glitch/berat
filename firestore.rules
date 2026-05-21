@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- PRIMITIVE HELPERS ---
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // --- VALIDATION BLUEPRINTS (Anti-Update-Gap) ---
+    function isValidSetting(data) {
+      return data.keys().hasAll(['capacity', 'operatorName']) 
+        && data.keys().size() <= 2
+        && data.capacity is number 
+        && data.capacity >= 1 
+        && data.capacity <= 100
+        && data.operatorName is string 
+        && data.operatorName.size() <= 50;
+    }
+
+    function isValidHistory(data) {
+       return data.keys().hasAll(['id', 'timestamp', 'action', 'details']) 
+        && data.keys().size() == 4
+        && data.id is string && data.id.size() <= 128
+        && data.timestamp is string && data.timestamp.size() <= 50
+        && data.action is string && data.action.size() <= 100
+        && data.details is string && data.details.size() <= 1000;
+    }
+
+    function isValidGroup(data) {
+       return data.keys().hasAll(['id', 'name', 'peopleCount', 'sessionsBlocked']) 
+        && data.keys().size() <= 4
+        && data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.peopleCount is number && data.peopleCount > 0
+        && data.sessionsBlocked is list 
+        && data.sessionsBlocked.size() <= 24; 
+    }
+
+    // Bookings are objects within the Session array
+    function isValidBooking(booking) {
+      let coreKeys = booking.keys().hasAll(['id', 'customerName', 'phone', 'count'])
+        && booking.id is string && booking.id.size() <= 128
+        && booking.customerName is string && booking.customerName.size() <= 100
+        && booking.phone is string && booking.phone.size() <= 20
+        && booking.count is number && booking.count > 0;
+      let hasMovie = !('movieId' in booking.keys()) || (booking.movieId is string && booking.movieId.size() <= 128);
+      return coreKeys && hasMovie;
+    }
+
+    function areBookingsValid(bookings) {
+      // Cannot natively iterate cleanly for deep inspection without large workarounds, 
+      // but we enforce strict max constraints.
+      return bookings is list && bookings.size() <= 60;
+    }
+
+    function isValidSession(data) {
+       let hasCoreKeys = data.keys().hasAll(['id', 'time', 'movieId', 'peopleCount', 'isFinished', 'status']);
+       let coreTypes = data.id is string && data.id.size() <= 128
+                    && data.time is string && data.time.size() == 5
+                    && data.movieId is string && data.movieId.size() <= 128
+                    && data.peopleCount is number && data.peopleCount >= 0
+                    && data.isFinished is bool
+                    && data.status is string && data.status.matches('^(open|active|maintenance)$');
+                    
+       let validActiveSince = !('activeSince' in data.keys()) || (data.activeSince is number);
+       let validGroupId = !('groupId' in data.keys()) || (data.groupId is string && data.groupId.size() <= 128);
+       let validBookings = !('bookings' in data.keys()) || (areBookingsValid(data.bookings));
+
+       return hasCoreKeys && coreTypes && validActiveSince && validGroupId && validBookings;
+    }
+
+    // --- RULE SETS ---
+
+    // Sessions
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() 
+                 && isValidId(sessionId)
+                 && isValidSession(incoming());
+      
+      // Strict updates via affectedKeys (State Machine)
+      allow update: if isSignedIn() 
+                 && isValidId(sessionId)
+                 && isValidSession(incoming())
+                 && (
+                   // Allow altering specific states globally via operations
+                   incoming().diff(existing()).affectedKeys().hasOnly(['time', 'isFinished']) ||
+                   incoming().diff(existing()).affectedKeys().hasOnly(['peopleCount', 'bookings']) ||
+                   incoming().diff(existing()).affectedKeys().hasOnly(['peopleCount']) ||
+                   incoming().diff(existing()).affectedKeys().hasOnly(['movieId']) ||
+                   incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeSince']) ||
+                   incoming().diff(existing()).affectedKeys().hasOnly(['status']) ||
+                   incoming().diff(existing()).affectedKeys().hasOnly(['groupId', 'peopleCount'])
+                 );
+
+      allow delete: if isSignedIn();
+    }
+
+    // Groups
+    match /groups/{groupId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() 
+                 && isValidId(groupId)
+                 && isValidGroup(incoming());
+      // No group updates implemented in client, strict lock
+      allow update: if false; 
+      allow delete: if isSignedIn();
+    }
+
+    // History (Append Only Immutable Logs)
+    match /history/{historyId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() 
+                 && isValidId(historyId)
+                 && isValidHistory(incoming());
+      allow update: if false; // Immutable histories
+      allow delete: if isSignedIn(); // Allow clear all history
+    }
+
+    // Settings
+    match /settings/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && docId == 'global' && isValidSetting(incoming());
+      allow update: if isSignedIn() 
+                  && docId == 'global' 
+                  && isValidSetting(incoming())
+                  && (
+                    incoming().diff(existing()).affectedKeys().hasOnly(['capacity']) ||
+                    incoming().diff(existing()).affectedKeys().hasOnly(['operatorName'])
+                  );
+      // Settings cannot be deleted
+      allow delete: if false;
+    }
+  }
+}
+
